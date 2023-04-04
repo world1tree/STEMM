@@ -55,6 +55,8 @@ def conv_calc(input_len, conv_layers):
 
 def process_audio(word_time, n_frames):
     word_time = list(map(float, word_time.split(",")))
+    # wav2vec卷积与额外的2层CNN卷积
+    # 1D卷积: (kernel_size, stride, padding)
     conv_layers = [
         (10, 5, 0),
         (3, 2, 0),
@@ -63,22 +65,26 @@ def process_audio(word_time, n_frames):
         (3, 2, 0),
         (2, 2, 0),
         (2, 2, 0),
-        (5, 2, 2),
-        (5, 2, 2),
+        (5, 2, 2),    # 长度缩小一半
+        (5, 2, 2),    # 长度再次缩小一半
     ]
+    # 计算最终这句语音经过卷积之后的维度
     n_hidden = conv_calc(n_frames, conv_layers)
     L, R = [], []
     L.append(0)
     total_time = word_time[-1]
     for i in range(len(word_time)):
+        # 从这里判断应该是结束时间
         R.append(int(word_time[i] / total_time * n_hidden + 0.5) - 1)
         if i < len(word_time) - 1:
-            L.append(R[-1] + 1)
+            L.append(R[-1] + 1)   # 前一帧+1
+    # 开始帧，结束帧(相对偏移!!!)
     result = [f"{L[i]},{R[i]}" for i in range(len(word_time))]
     result = '|'.join(result)
     return result
 
 def process_text(word_text, src_text):
+    # 处理子词化后对应的位置
     word_text = word_text.split(",")
     if pre_tokenizer is not None:
         src_text = pre_tokenizer.encode(src_text)
@@ -113,7 +119,13 @@ def main():
         pbar = tqdm.tqdm(range(len(data)))
         for item in data:
             pbar.update()
+            # NOTE: word_time与word_text之间是严格对应的
+            # word-time与n_frames之间的对齐
+            # 语音与经过CNN卷积后的帧数的对齐
             item["audio_align"] = process_audio(item["word_time"], item["n_frames"])
+            # word-text与src_text之间的对齐
+            # 语音对应的文本(某些片段可能没有单词)与transcript之间的对齐
+            # bpe之后如何知道是语音对应的文本
             item["text_align"] = process_text(item["word_text"], item["src_text"])
         df = pd.DataFrame.from_dict(data)
         save_df_to_tsv(df, os.path.join(data_dir, split + "_raw_seg_plus.tsv"))

@@ -165,6 +165,10 @@ def get_features_or_waveform(path: str, need_waveform=False):
         features_or_waveform (numpy.ndarray): speech features or waveform.
     """
     _path, slice_ptr = parse_path(path)
+    # 2
+    # print(len(slice_ptr))
+    # False
+    # print(need_waveform)
     if len(slice_ptr) == 0:
         if need_waveform:
             return get_waveform(_path, always_2d=False)
@@ -180,6 +184,7 @@ def get_features_or_waveform(path: str, need_waveform=False):
             )
     else:
         raise ValueError(f"Invalid path: {path}")
+
 
     return features_or_waveform
 
@@ -566,6 +571,7 @@ class SpeechToTextDatasetCreator(object):
         samples = []
         _splits = splits.split(",")
         for split in _splits:
+            # 使用_seg_plus.tsv文件
             tsv_path = op.join(root, f"{split}_seg_plus.tsv")
             if not op.isfile(tsv_path):
                 raise FileNotFoundError(f"Dataset not found: {tsv_path}")

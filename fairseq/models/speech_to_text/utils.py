@@ -589,31 +589,42 @@ def get_prob(num_updates, mixup_arguments, is_training):
 
 
 def mix_input(audio, source, align_pad, align_lengths, prob):
+    # align_pad: (B, T2, 4)
+    # align_lengths: (B)
     # token replace
+    # (B, T0, D)
     audio = audio.transpose(0, 1)
+    # (B, T1, D)
     source = source.transpose(0, 1)
     mixseq = []
     bsz, _, fdim = audio.shape
     if not isinstance(prob, list):
+        # [1.0, ...], prob被固定死了
         prob = [prob for i in range(bsz)]
     for i in range(bsz):
         word_length = align_lengths[i].item()
+        # 一句语音对应的对齐个数
         word_prob = torch.rand(word_length)
         word_sample = word_prob < prob[i]
-        seq = torch.zeros(0, fdim).cuda().type_as(audio)
+        # seq = torch.zeros(0, fdim).cuda().type_as(audio)
+        seq = torch.zeros(0, fdim).type_as(audio)
         for j in range(word_length):
             if word_sample[j]:
+                # 语音对齐
                 st, en = align_pad[i, j, 0:2]
                 audio_seq = audio[i, st:en+1, :]
                 seq = torch.cat((seq, audio_seq), dim=0)
             else:
+                # 文本对齐
                 st, en = align_pad[i, j, 2:4]
                 text_seq = source[i, st:en+1, :]
                 seq = torch.cat((seq, text_seq), dim=0)
         mixseq.append(seq)
-    mixseq_length = torch.LongTensor([seq.size(0) for seq in mixseq]).cuda()
+    # mixseq_length = torch.LongTensor([seq.size(0) for seq in mixseq]).cuda()
+    mixseq_length = torch.LongTensor([seq.size(0) for seq in mixseq])
     max_len = torch.max(mixseq_length).item()
-    mixseq_pad = torch.zeros(bsz, max_len, fdim).cuda().type_as(audio)
+    # mixseq_pad = torch.zeros(bsz, max_len, fdim).cuda().type_as(audio)
+    mixseq_pad = torch.zeros(bsz, max_len, fdim).type_as(audio)
     for i, seq in enumerate(mixseq):
         mixseq_pad[i, :seq.size(0)] = seq
     mixseq_encoder_padding_mask = lengths_to_padding_mask(mixseq_length)

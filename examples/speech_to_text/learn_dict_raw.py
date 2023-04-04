@@ -51,7 +51,7 @@ def main():
     parser.add_argument("--cmvn-type", default="utterance",
                         choices=["global", "utterance"],
                         help="The type of cepstral mean and variance normalization")
-    parser.add_argument("--tgt-lang", "target language")
+    parser.add_argument("--tgt-lang", help="target language")
     args = parser.parse_args()
     process(args)
 

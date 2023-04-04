@@ -2,7 +2,8 @@
 
 import logging
 import math
-from typing import Dict, List, Optional, OrderedDict, Tuple
+from typing import Dict, List, Optional, Tuple
+from collections import  OrderedDict
 from pathlib import Path
 
 import torch
@@ -48,20 +49,20 @@ class Conv1dSubsampler(nn.Module):
 
     def __init__(
         self,
-        in_channels: int,
-        mid_channels: int,
-        out_channels: int,
-        kernel_sizes: List[int] = (3, 3),
+        in_channels: int,         # 768
+        mid_channels: int,        # 1024
+        out_channels: int,        # 512
+        kernel_sizes: List[int] = (3, 3),  # [5, 5]
     ):
         super(Conv1dSubsampler, self).__init__()
-        self.n_layers = len(kernel_sizes)
+        self.n_layers = len(kernel_sizes)   # 2
         self.conv_layers = nn.ModuleList(
             nn.Conv1d(
-                in_channels if i == 0 else mid_channels // 2,
-                mid_channels if i < self.n_layers - 1 else out_channels * 2,
-                k,
+                in_channels if i == 0 else mid_channels // 2,     # 768, 512
+                mid_channels if i < self.n_layers - 1 else out_channels * 2, # 1024, 1024
+                k,                                                           # 5, 5
                 stride=2,
-                padding=k // 2,
+                padding=k // 2,                                              # 2, 2
             )
             for i, k in enumerate(kernel_sizes)
         )
@@ -76,10 +77,13 @@ class Conv1dSubsampler(nn.Module):
         bsz, in_seq_len, _ = src_tokens.size()  # B x T x (C x D)
         x = src_tokens.transpose(1, 2).contiguous()  # -> B x (C x D) x T
         for conv in self.conv_layers:
+            # 1. (B, D, T) => (B, 1024, T/2),  3. (B, 512, T/2) => (B, 1024, T/4)
             x = conv(x)
+            # 2. (B, 1024, T/2) => (B, 512, T/2), 4. (B, 1024, T/4) => (B, 512, T/4)
             x = nn.functional.glu(x, dim=1)
         _, _, out_seq_len = x.size()
         x = x.transpose(1, 2).transpose(0, 1).contiguous()  # -> T x B x (C x D)
+        # (T/4, B, 512)
         return x, self.get_out_seq_lens_tensor(src_lengths)
 
 
@@ -392,7 +396,7 @@ class S2TTransformerEncoder(FairseqEncoder):
         audio = self.embed_scale * audio
         audio_encoder_padding_mask = lengths_to_padding_mask(input_lengths)
         positions = self.embed_audio_positions(audio_encoder_padding_mask).transpose(0, 1)
-        audio += positions
+        audio = audio + positions
         audio = self.dropout_module(audio)
         for layer in self.transformer_acoustic_layers:
             audio = layer(audio, audio_encoder_padding_mask)
@@ -411,7 +415,7 @@ class S2TTransformerEncoder(FairseqEncoder):
         mix_output = mix_input(audio, source, align_pad, align_lengths, prob)
         mixseq, mixseq_encoder_padding_mask = mix_output
         positions = self.embed_source_positions(mixseq_encoder_padding_mask).transpose(0, 1)
-        mixseq += positions
+        mixseq = mixseq + positions
         if self.layernorm_embedding is not None:
             mixseq = self.layernorm_embedding(mixseq)
         mixseq = self.dropout_module(mixseq)
@@ -555,6 +559,7 @@ def base_architecture(args):
         args, "decoder_ffn_embed_dim", args.encoder_ffn_embed_dim
     )
     args.decoder_layers = getattr(args, "decoder_layers", 6)
+    args.encoder_layers = getattr(args, "encoder_layers", 6)
     args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 8)
     args.decoder_normalize_before = getattr(args, "decoder_normalize_before", True)
     args.decoder_learned_pos = getattr(args, "decoder_learned_pos", False)

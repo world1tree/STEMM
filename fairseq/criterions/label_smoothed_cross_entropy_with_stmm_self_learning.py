@@ -60,11 +60,19 @@ class LabelSmoothedCrossEntropyCriterionWithSTMMSelfLearning(
         audio, audio_lengths, source, source_lengths, prev_output_tokens, align_pad, align_lengths = sample["net_input"].values()
         audio, audio_encoder_padding_mask = model.encoder.encode_audio(audio, audio_lengths)
         source, source_encoder_padding_mask = model.encoder.forward_embedding(source)
+        # print(audio.shape) (67, 2, 512)
+        # print(source.shape) (30, 2, 512)
+        # print(align_pad.shape) (2, 28, 4)
+        # print(align_lengths.shape) (2)
+        # exit(0)
         max_prob = get_prob(model.encoder.num_updates, model.encoder.mixup_arguments, model.training)
         # st loss
         source_st, source_encoder_padding_mask_st = model.encoder.get_mixed_input(audio, source, align_pad, align_lengths, 1.0)
         encoder_out_st, encoder_padding_mask_st = model.encoder.encode_text(source_st, source_encoder_padding_mask_st)
         encoder_out_st = save_to_dict(encoder_out_st, encoder_padding_mask_st)
+        # print(source_st.shape)
+        # print(encoder_out_st["encoder_out"][0].shape)
+        # exit(0)
         net_output_st = model.decoder(
             prev_output_tokens=prev_output_tokens, encoder_out=encoder_out_st
         )
@@ -103,7 +111,9 @@ class LabelSmoothedCrossEntropyCriterionWithSTMMSelfLearning(
             n_correct, total = self.compute_accuracy(model, net_output_st, sample)
             logging_output["n_correct"] = utils.item(n_correct.data)
             logging_output["total"] = utils.item(total.data)
-        
+
+        # target = torch.randn(loss_st.shape)
+        # torch.nn.L1Loss()
         loss = loss_st + loss_mix + output_jsd * self.jsd_weight
         logging_output["loss"] = utils.item(loss.data) if reduce else loss.data
 
